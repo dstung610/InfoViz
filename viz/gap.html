@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <style type="text/css" media="screen, print">
+    body {
+      margin: 30px 50px;
+      font-family: sans-serif;
+    }
+  </style>
+  <title>Gap</title>
+</head>
+
+<body>
+  <h1>France - Gap</h1>
+
+  <script src="../vendor/d3/d3.js"></script>
+  <script>
+    var margin = {
+        top: 100,
+        right: 100,
+        bottom: 40,
+        left: 100
+      },
+      width = 800 - margin.left - margin.right,
+      height = 600 - margin.top - margin.bottom;
+
+    var x = d3.scaleLinear()
+      .range([0, width]);
+
+    var y = d3.scaleLinear()
+      .range([height, 0]);
+
+    var svg = d3.select('body').append('svg')
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+      .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    var upper = 0.2;
+    var lower = 0.2;
+    
+    
+
+    x.domain([1800, 2015]);
+
+    y.domain([0, 1]);
+
+    plotGap("../data/income/US.tsv");
+    plotGap("../data/income/FR.tsv");
+
+    function plotGap(filename) {
+      d3.tsv(filename, function (error, data) {
+        if (error) throw error;
+
+
+        console.log(data);
+
+        topChunk = data.filter(d => +d.low >= 1 - upper);
+
+        console.log("Top chunk: ", topChunk);
+
+        bottomChunk = data.filter(d => +d.high <= lower);
+        console.log("Bottom chunk: ", bottomChunk);
+
+        years = Array.from(new Set(data.map(d => {
+          return +d.year
+        })));
+        console.log("Years: ", years);
+
+        gaps = years.map(year => {
+          topShare = topChunk.filter(d => +d.year == year).map(d => {
+            return +d.share
+          }).reduce((acc, item) => acc += item, 0);
+          bottomShare = bottomChunk.filter(d => +d.year == year).map(d => {
+            return +d.share
+          }).reduce((acc, item) => acc += item, 0);
+          // console.log("Top share: ", topShare);
+          // console.log("Bottom share: ", bottomShare);
+          gap = topShare - bottomShare;
+          return {
+            "year": year,
+            "gap": gap
+          };
+        });
+
+        console.log("Gaps: ", gaps);
+
+
+        var xAxis = d3.axisBottom(x)
+          .tickFormat(d3.format("d"));
+
+        svg.append('g')
+          .attr('transform', 'translate(5,' + height + ')')
+          .call(xAxis);
+
+        var yAxis = d3.axisLeft(y);
+        svg.append('g')
+          .attr('transform', 'translate(0,-5)')
+          .call(yAxis);
+
+        var ts = d3.line()
+          .x(function (d) {
+            return x(+d.year);
+          })
+          .y(function (d) {
+            return y(+d.gap);
+          });
+
+        svg.append("path").datum(gaps)
+          .attr("d", ts)
+          .attr("stroke", "red")
+          .attr("stroke-width", 1)
+          .attr("fill", "none");
+      });
+    }
+  </script>
+</body>
+
+</html>

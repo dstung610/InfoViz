@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<style type="text/css" media="screen, print">
+		body {
+			margin: 30px 50px;
+			font-family: sans-serif;
+		}
+
+		input {
+			float: left;
+		}
+
+		label {
+			display: block;
+		}
+
+		#graph {
+			margin-left: 250px
+		}
+
+		#selectTable {
+			overflow-y: visible;
+			overflow-x: auto;
+			height: 50%;
+			float: left;
+			position: absolute;
+			top: 150px;
+			left: 0;
+			width: 250px;
+			clear: both;
+			border: solid 1px black;
+		}
+	</style>
+	<title>Gini Line Graph</title>
+</head>
+
+<body>
+	<h2 style="text-align: center">Gini Index Line graph over time</h2>
+	<div id="graph"></div>
+	<script src="../vendor/d3/d3.js"></script>
+	<script>
+		var countries = [];
+		var margin = {
+				top: 30,
+				right: 10,
+				bottom: 30,
+				left: 50
+			},
+			width = 800,
+			height = 500,
+			innerWidth = width - margin.left - margin.right,
+			innerHeight = height - margin.top - margin.bottom,
+			colors = ['#cc0b00', '#ccb800', '#00cc00', '#009ccc', '#5800cc'],
+			boxWidth = 50;
+		var x, y, active = 0;
+
+		// Draw chart graph svg area
+		var svg = d3.select('#graph').append('svg')
+			.attr("width", width)
+			.attr("height", height)
+
+		// // Draw axis based on data max min
+		d3.tsv("../data/income_gini.tsv", function(error, data) {
+			var max = d3.max(data, function(d) {
+				return parseInt(d.year);
+			});
+			var min = d3.min(data, function(d) {
+				return parseInt(d.year);
+			});
+			console.log(min);
+			x = d3.scaleLinear().domain([min, max]).range([0, innerWidth]);
+			y = d3.scaleLinear().domain([0, 100]).range([innerHeight, 0]);
+
+			var xAxis = d3.axisBottom(x)
+				.tickFormat(d3.format("d"));
+			svg.append('g')
+				.attr('transform', 'translate(25,' + (innerHeight + margin.top) + ')')
+				.attr('class', 'axis')
+				.call(xAxis);
+
+			var yAxis = d3.axisLeft(y);
+			svg.append('g')
+				.attr('transform', 'translate(25,' + margin.top + ')')
+				.call(yAxis);
+		});
+
+		d3.tsv("../data/countries.tsv", function(error, data) {
+			var div11 = d3.select('body').append('div')
+				.attr("id", "selectTable");
+			d3.tsv("../data/income_gini.tsv", function(error1, data1) {
+				var dataFiltered = data.filter(function(d) {
+					for (var i = 0; i < data1.length; i++) {
+						if (data1[i].country == d.code) {
+							return d;
+						}
+					}
+				})
+				// console.log(data);
+				// console.log(data1);
+				// console.log(dataFiltered);
+				div11.selectAll('input')
+					.append('label')
+					.data(dataFiltered)
+					.enter()
+					.append('label').text(function(d) {
+						return d.name;
+					})
+					.append("input")
+					.attr("type", "checkbox")
+					.attr("onchange", function(d) {
+						return "listChangeDetector(" + d.code + ")";
+					})
+					.attr("value", function(d) {
+						return d.code;
+					})
+					.attr("id", function(d) {
+						return d.code;
+					})
+					.attr("tabindex", "0");
+			})
+		});
+
+		function listChangeDetector(country) {
+			if (countries.indexOf(country.value) != -1) {
+				console.log("OUT");
+				countries.splice(countries.indexOf(country.value), 1);
+				active = active - 1;
+			} else {
+				console.log("IN");
+				countries.push("" + country.value);
+				active = active + 1;
+			};
+			console.log(countries);
+			if (active == 5) {
+				disabledOption();
+			} else {
+				reactivateCheckbox();
+			}
+			plotPath(countries);
+		}
+
+		function disabledOption() {
+			d3.selectAll("input[type='checkbox']:not(:checked)")
+				.property("disabled", true);
+		}
+
+		function reactivateCheckbox() {
+			d3.selectAll("input[type='checkbox']:not(:checked)")
+				.property("disabled", false);
+		}
+
+
+		function plotPath(countries) {
+			d3.tsv("../data/income_gini.tsv", function(error, data) {
+				if (error) throw error;
+
+				// Clear chart to redraw
+				d3.selectAll("#infoPath").remove();
+				d3.selectAll("#infoDot").remove();
+				d3.selectAll(".legend").remove();
+				d3.selectAll(".legendText").remove();
+				d3.selectAll(".axis").remove();
+
+				var filteredData = data.filter(function(d) {
+					for (var i = 0; i < countries.length; i++) {
+						if (countries[i] == d.country) {
+							return d;
+						}
+					}
+				})
+				var max = d3.max(filteredData, function(d) {
+					return parseInt(d.year);
+				});
+				var min = d3.min(filteredData, function(d) {
+					return parseInt(d.year);
+				});
+				console.log(min);
+				x = d3.scaleLinear().domain([min, max]).range([25, innerWidth]);
+
+				var xAxis = d3.axisBottom(x)
+					.tickFormat(d3.format("d"));
+				svg.append('g')
+					.attr('transform', 'translate(25,' + (innerHeight + margin.top) + ')')
+					.attr('class', 'axis')
+					.call(xAxis);
+
+				for (var i = 0; i < countries.length; i++) {
+					countryRecords = data.filter(d => d.country == countries[i]).sort((a, b) => +a.year - +b.year);
+
+					svg.selectAll("dot")
+						.data(countryRecords)
+						.enter()
+						.append("circle")
+						.attr("id", "infoDot")
+						.attr("r", 3)
+						.attr("cx", function(d) {
+							return x(d.year);
+						})
+						.attr("cy", function(d) {
+							return y(d.gini_index * 100);
+						})
+						.attr("fill", colors[i]);
+
+					svg.append("path").datum(countryRecords)
+						.attr("id", "infoPath")
+						.attr("d", d3.line()
+							.x(function(d) {
+								return x(d.year);
+							})
+							.y(function(d) {
+								return y(((d.gini_index) * 100));
+							}))
+						.attr("stroke", colors[i])
+						.attr("stroke-width", 2)
+						.attr("fill", "none");
+
+					svg.append("text")
+						.attr("class", "legendText")
+						.attr("x", boxWidth + 22)
+						.attr("y", 41 + i * 20)
+						.text(countries[i])
+
+					svg.append("rect")
+						.attr("class", "legend")
+						.attr("x", boxWidth - 10)
+						.attr("y", 30 + i * 20)
+						.attr("height", 10)
+						.attr("width", 30)
+						.attr("stroke", "black")
+						.style("fill", colors[i])
+				};
+			})
+		};
+	</script>
+
+</body>
+
+</html>

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<style type="text/css" media="screen, print">
+		body {
+			background-color: #f9f9f9;
+			color: black;
+			font-family: sans-serif;
+		}
+
+		rect {
+			border: solid 1px black;
+		}
+
+		h5,
+		h1 {
+			margin: 5px 0px 5px 0px;
+		}
+	</style>
+	<title>Gini-Map Visualization</title>
+</head>
+
+<body style="text-align:center;">
+	<h1>GINI Index Geo-Map</h1>
+	<h5>GINI Index over the world in</h5>
+	<div id="container">
+		<div id="options">
+			<div id="yeardropdown">
+				Year:
+			</div>
+			<p style="color: #AAA"><i>*** A smaller value means lower inequality. ***</i></p>
+			<div id="map"></div>
+		</div>
+
+		<!-- <script src="../vendor/d3/d3.js"></script> -->
+		<script src="../vendor/d3/d3.v5.min.js"></script>
+		<script src="../vendor/d3/topojson.v1.min.js"></script>
+		<script src="../vendor/d3/d3-geo-projection.v2.min.js"></script>
+		<script>
+			// Add dropdown option control
+
+			var dropdownYear = d3.select("#yeardropdown").append("select").attr("id", "dropdownYear");
+			var yearRange = d3.range(1900, 2019);
+			dropdownYear.selectAll("option")
+				.data(yearRange)
+				.enter()
+				.append("option")
+				.attr("value", function(d) {
+					return d;
+				}).text(function(d) {
+					return d;
+				});
+
+			dropdownYear.on("change", processData);
+
+			// ['#d4eac7', '#c6e3b5', '#b7dda2', '#a9d68f', '#9bcf7d', '#8cc86a', '#7ec157', '#77be4e', '#70ba45', '#65a83e', '#599537', '#4e8230', '#437029', '#385d22', '#2d4a1c', '#223815'];
+			const width = document.getElementById("container").offsetWidth * 0.95,
+				height = 550,
+				legendCellSize = 20,
+				colors = ['#0084ff', '#59afff', '#8cc8ff', '#bfe0ff', '#d9edff'].reverse();
+
+			const svg = d3.select('#map').append("svg")
+				.attr("id", "svg")
+				.attr("width", width)
+				.attr("height", height)
+				.attr("class", "svg");
+
+
+			var legend = svg.append('g').attr('transform', 'translate(120, 150)');
+
+			function addLegend(min, max) {
+				legend.append("polyline")
+					.attr("id", "cursor")
+					.attr("points", "20, 0 20, 20 4, 10")
+					.style("fill", "#222b1d")
+					.style("stroke", "black")
+					.style("opacity", "0.9")
+					.style("stroke-width", "1")
+					.style("padding", "1em");
+
+				legend.selectAll()
+					.data(d3.range(colors.length))
+					.enter().append('svg:rect')
+					.attr('height', legendCellSize + 'px')
+					.attr('width', legendCellSize + 'px')
+					.attr('x', 5)
+					.attr('y', function(d) {
+						return d * legendCellSize;
+					})
+					.on("mouseover", function(d) {
+						legend.select("#cursor")
+							.attr('transform', 'translate(' + (legendCellSize + 5) + ', ' + (d * legendCellSize) + ')')
+							.style("display", null);
+						d3.selectAll("path[scorecolor='" + colors[colors.length - 1 - d] + "']")
+							.style('fill', "#9966cc");
+					})
+					.on("mouseout", function(d) {
+						legend.select("#cursor")
+							.style("display", "none");
+						d3.selectAll("path[scorecolor='" + colors[colors.length - 1 - d] + "']")
+							.style('fill', colors[colors.length - 1 - d]);
+					})
+					.style("fill", function(d) {
+						return colors[colors.length - 1 - d];
+					});
+
+				var legendScale = d3.scaleLinear().domain([min, max])
+					.range([0, colors.length * legendCellSize].reverse());
+
+				legendAxis = legend.append("g")
+					.attr("class", "axis")
+					.call(d3.axisLeft(legendScale).ticks(5));
+			}
+
+			// Beautify the legend
+			function shortCountryName(country) {
+				return country.replace("Démocratique", "Dem.").replace("République", "Rep.");
+			}
+
+			function getColorIndex(color) {
+				for (var i = 0; i < colors.length; i++) {
+					if (colors[i] === color) {
+						return colors.length - 1 - i;
+					}
+				}
+				return -1;
+			}
+
+			// Add Tooltip function
+			function addTooltip() {
+				var tooltip = svg.append("g") // Group for the whole tooltip
+					.attr("id", "tooltip")
+					.style("display", "none");
+
+				tooltip.append("polyline") // The rectangle containing the text, it is 210px width and 60 height
+					.attr("points", "0,0 210,0 210,60 0,60 0,0")
+					.style("fill", "#222b1d")
+					.style("stroke", "black")
+					.style("opacity", "0.9")
+					.style("stroke-width", "1")
+					.style("padding", "1em");
+
+				tooltip.append("line") // A line inserted between country name and score
+					.attr("x1", 40)
+					.attr("y1", 25)
+					.attr("x2", 160)
+					.attr("y2", 25)
+					.style("stroke", "#929292")
+					.style("stroke-width", "0.5")
+					.attr("transform", "translate(0, 5)");
+
+				var text = tooltip.append("text") // Text that will contain all tspan (used for multilines)
+					.style("font-size", "13px")
+					.style("fill", "#c1d3b8")
+					.attr("transform", "translate(0, 20)");
+
+				text.append("tspan") // Country name udpated by its id
+					.attr("x", 105) // ie, tooltip width / 2
+					.attr("y", 0)
+					.attr("id", "tooltip-country")
+					.attr("text-anchor", "middle")
+					.style("font-weight", "600")
+					.style("font-size", "16px");
+
+				text.append("tspan") // Fixed text
+					.attr("x", 105) // ie, tooltip width / 2
+					.attr("y", 30)
+					.attr("text-anchor", "middle")
+					.style("fill", "929292")
+					.text("Gini : ");
+
+				text.append("tspan") // Score udpated by its id
+					.attr("id", "tooltip-score")
+					.style("fill", "#c1d3b8")
+					.style("font-weight", "bold");
+
+				return tooltip;
+			}
+
+			const projection = d3.geoNaturalEarth1()
+				.scale(1)
+				.translate([0, 0]);
+
+			const path = d3.geoPath()
+				.pointRadius(2)
+				.projection(projection);
+
+			const cGroup = svg.append("g");
+
+			// Load map and countries list
+			var promises = [];
+			promises.push(d3.json("../data/world-map.json"));
+			promises.push(d3.tsv("../data/countries.tsv"));
+
+			var geojson = "";
+
+
+			const min = 0,
+				max = 1;
+			var quantile = d3.scaleQuantile().domain([min, max]).range(colors);
+			const errorColor = "#595959";
+			const noDataColor = "#898989";
+			const positiveColor = "#0066ff";
+			var selectedYear = "0",
+				selectedShare = 0;
+
+			// Rule the share up to selectedYear of selectedYear
+
+			var tooltip = addTooltip();
+
+			Promise.all(promises).then(function(values) {
+				geojson = values[0];
+
+				var b = path.bounds(geojson),
+					s = .80 / Math.max((b[1][0] - b[0][0]) / width, (b[1][1] - b[0][1]) / height),
+					t = [(width - s * (b[1][0] + b[0][0])) / 2, (height - s * (b[1][1] + b[0][1])) / 2];
+
+				projection
+					.scale(s)
+					.translate(t);
+
+				cGroup.selectAll("path")
+					.data(geojson.features).enter()
+					.append("path")
+					.attr("d", path)
+					.attr("id", function(d) {
+						return "code" + d.id;
+					})
+					.attr("class", "country");
+
+				processData();
+
+				var legend = addLegend(min, max);
+			});
+
+			function processData() {
+				selectedYear = d3.select("#dropdownYear").node().value;
+				console.log(selectedYear);
+				Promise.all(promises).then(function(values) {
+					var countries = values[1];
+
+					countries.forEach(function(e, i) {
+						var countryPath = d3.select("#code" + e.code);
+						var value = 0;
+						var hasData = false;
+						d3.tsv("../data/income_gini.tsv")
+							.then(function(data) {
+								for (var i = 0; i < data.length; i++) {
+									if (data[i].year == selectedYear && data[i].country == e.code) {
+										hasData = true;
+										value = +data[i].gini_index;
+										// console.log(value);
+										// console.log(data[i].country);
+									}
+								}
+								if (hasData) {
+									countryPath
+										.attr("scorecolor", quantile(value))
+										.style("fill", quantile(value))
+										.on("mouseover", function(d) {
+											countryPath.style("fill", "#9966cc");
+											tooltip.style("display", null);
+											tooltip.select('#tooltip-country')
+												.text(shortCountryName(e.name));
+											tooltip.select('#tooltip-score')
+												.text(value.toFixed(4));
+											legend.select("#cursor")
+												.attr('transform', 'translate(' + (legendCellSize + 5) + ', ' + (getColorIndex(quantile(value)) * legendCellSize) + ')')
+												.style("display", null)
+										})
+										.on("mouseout", function(d) {
+											countryPath.style("fill", quantile(value));
+											tooltip.style("display", "none");
+											legend.select("#cursor").style("display", "none");
+
+										})
+										.on("mousemove", function(d) {
+											var mouse = d3.mouse(this);
+											tooltip.attr("transform", "translate(" + mouse[0] + "," + (mouse[1] - 75) + ")");
+										});
+								} else {
+									countryPath
+										.style("fill", noDataColor)
+										.on("mouseover", function(d) {
+											countryPath.style("fill", "#9966cc");
+											tooltip.style("display", null);
+											tooltip.select('#tooltip-country')
+												.text(shortCountryName(e.name));
+											tooltip.select('#tooltip-score')
+												.text("No data this year");
+										})
+										.on("mouseout", function(d) {
+											countryPath.style("fill", noDataColor);
+											tooltip.style("display", "none");
+										})
+										.on("mousemove", function(d) {
+											var mouse = d3.mouse(this);
+											tooltip.attr("transform", "translate(" + mouse[0] + "," + (mouse[1] - 75) + ")");
+										});
+
+								}
+
+							})
+							.catch(function(error) {
+								countryPath
+									.style("fill", errorColor)
+									.on("mouseover", function(d) {
+										countryPath.style("fill", "#9966cc");
+										tooltip.style("display", null);
+										tooltip.select('#tooltip-country')
+											.text(shortCountryName(e.name));
+										tooltip.select('#tooltip-score')
+											.text("N/A");
+									})
+									.on("mouseout", function(d) {
+										countryPath.style("fill", errorColor);
+										tooltip.style("display", "none");
+									})
+									.on("mousemove", function(d) {
+										var mouse = d3.mouse(this);
+										tooltip.attr("transform", "translate(" + mouse[0] + "," + (mouse[1] - 75) + ")");
+									});
+							});
+					});
+				})
+			};
+		</script>
+</body>
+
+</html>
